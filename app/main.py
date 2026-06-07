@@ -1,21 +1,16 @@
 # ai-service/app/main.py
-import json
-import asyncio
-import logging 
-import httpx
-import os 
+import logging
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .models import UserInput, AIResponse
-from .session_manager import get_session, create_session, update_session
+from .session_manager import get_session, create_session, update_session, cleanup_old_sessions
 from .ai_agent import chat_with_ai, extract_report_json
-from .db import save_report
 
-NODE_BACKEND_URL = os.getenv("NODE_BACKEND_URL", "http://localhost:3001")
-
-# 🔥 TAMBAHKAN LOGGING
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+NODE_BACKEND_URL = os.getenv("NODE_BACKEND_URL", "http://localhost:3001")
 
 app = FastAPI()
 
@@ -26,14 +21,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GREETING = (
-    "Halo selamat datang di citynex silahkan melaporkan masalah yang anda temui di kota anda"
-)
+GREETING = "Halo selamat datang di citynex silahkan melaporkan masalah yang anda temui di kota anda"
 
 @app.post("/api/ai/chat", response_model=AIResponse)
 async def chat(user_input: UserInput):
-    session = get_session(user_input.session_id)
+    cleanup_old_sessions()
 
+    session = get_session(user_input.session_id)
     if not session:
         session = create_session(user_input.session_id)
         session["history"].append({"role": "assistant", "content": GREETING})
@@ -52,6 +46,9 @@ async def chat(user_input: UserInput):
 
     report_data = extract_report_json(ai_response)
     is_complete = report_data is not None
+
+    if is_complete:
+        logger.info("📋 Report lengkap, dikirim ke Node.js untuk disimpan.")
 
     clean_message = ai_response.split("###REPORT_JSON###")[0].strip() if is_complete else ai_response
 

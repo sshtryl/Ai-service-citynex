@@ -1,4 +1,3 @@
-from typing import Dict
 from datetime import datetime
 
 sessions = {}
@@ -23,12 +22,11 @@ def delete_session(session_id: str):
     if session_id in sessions:
         del sessions[session_id]
 
-# Cleanup session lama (lebih dari 1 jam)
 def cleanup_old_sessions():
     now = datetime.now()
-    to_delete = []
-    for sid, sess in sessions.items():
-        if (now - sess['created_at']).seconds > 3600:
-            to_delete.append(sid)
+    to_delete = [
+        sid for sid, sess in sessions.items()
+        if (now - sess["created_at"]).total_seconds() > 3600  # ← fix bug .seconds
+    ]
     for sid in to_delete:
         del sessions[sid]
